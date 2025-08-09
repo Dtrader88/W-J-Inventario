@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>W/J Inventario</title>
+  <link rel="icon" type="image/jpeg" href="logo.jpg">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    /* --- THEMES & GLOBAL STYLES (v1.5 - Logo Inspired) --- */
+    :root {
+      --bg: #0D0D0D; 
+      --surface: #1A1A1A; 
+      --surface-2: #2C2C2E;
+      --primary: #2563EB; /* Azul vibrante del logo */
+      --secondary: #F97316; /* Naranja vibrante del logo */
+      --accent: #D946EF; /* Magenta del logo */
+      --danger: #ff453a;
+      --text-primary: #F5F5F7;
+      --text-secondary: #A3A3A3;
+      --border: #3A3A3C;
+    }
+    [data-theme="light"] {
+      --bg: #f2f2f7; --surface: #ffffff; --surface-2: #e5e5ea;
+      --primary: #007aff; --text-primary: #000000; --text-secondary: #6e6e73;
+      --border: #d1d1d6;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { font-size: 16px; }
+    body {
+      background-color: var(--bg); color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      padding-bottom: 80px; transition: background-color .3s ease, color .3s ease;
+    }
+    button, input, select { font-family: inherit; }
+
+    /* --- LAYOUT & NAVIGATION --- */
+    .page { display: none; padding: 1rem; }
+    .page.active { display: block; animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 75px;
+      background-color: rgba(20, 20, 22, 0.85); backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px); border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; align-items: flex-start;
+      padding-top: 8px; z-index: 1000; transition: background-color .3s ease, border-top .3s ease;
+    }
+    [data-theme="light"] .bottom-nav { background-color: rgba(249, 249, 249, 0.85); }
+    .nav-btn {
+      background: none; border: none; color: var(--text-secondary);
+      display: flex; flex-direction: column; align-items: center;
+      gap: 4px; font-size: 0.65rem; cursor: pointer; transition: color .2s ease; flex-basis: 0; flex-grow: 1;
+    }
+    .nav-btn.active { color: var(--primary); }
+    .nav-btn svg { width: 26px; height: 26px; stroke-width: 1.5; }
+
+    /* --- UI COMPONENTS --- */
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .header .title-group { display: flex; align-items: center; gap: 12px; }
+    .header .logo { width: 40px; height: 40px; border-radius: 8px; }
+    .header h1 { font-size: 1.8rem; font-weight: 700; }
+    
+    .search-bar {
+      width: 100%; background-color: var(--surface-2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 0.75rem 1rem; color: var(--text-primary);
+      font-size: 1rem; margin-bottom: 1.5rem; transition: background-color .3s ease;
+    }
+    .search-bar::placeholder { color: var(--text-secondary); }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .kpi-card { background-color: var(--surface); border-radius: 12px; padding: 1rem; transition: background-color .3s ease; }
+    .kpi-card .title { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .kpi-card .value { font-size: 1.5rem; font-weight: 600; }
+    .kpi-card .value.positive { color: var(--secondary); }
+    .kpi-card .value.negative { color: var(--danger); }
+    .kpi-card .value.neutral { color: var(--primary); }
+
+    .chart-container { background-color: var(--surface); border-radius: 12px; padding: 1rem; height: 250px; margin-bottom: 1rem; transition: background-color .3s ease; }
+    .list-item {
+      background-color: var(--surface); border-radius: 12px; padding: 1rem;
+      margin-bottom: 0.75rem; display: flex; justify-content: space-between;
+      align-items: center; cursor: pointer; transition: background-color .2s ease;
+    }
+    .list-item:active { background-color: var(--surface-2); }
+    .list-item .info .name { font-weight: 600; }
+    .list-item .info .details { font-size: 0.85rem; color: var(--text-secondary); }
+    .list-item .status .qty { font-weight: 600; font-size: 1.1rem; }
+    .list-item .status .value { font-size: 0.8rem; color: var(--text-secondary); }
+    .fab {
+      position: fixed; bottom: 90px; right: 1rem; width: 56px; height: 56px;
+      background: linear-gradient(45deg, var(--primary), var(--accent));
+      color: white; border: none; border-radius: 50%;
+      font-size: 2rem; line-height: 56px; text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4); cursor: pointer; z-index: 999;
+    }
+
+    /* --- MODAL, SETTINGS, REPORTS & AI --- */
+    .modal-backdrop {
+      position: fixed; inset: 0; background-color: rgba(0,0,0,0.7);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      z-index: 2000; display: none; align-items: center; justify-content: center;
+    }
+    .modal-backdrop.visible { display: flex; }
+    .modal-dialog {
+      background-color: var(--surface-2); border-radius: 14px; width: 90%;
+      max-width: 400px; max-height: 85vh; display: flex; flex-direction: column;
+    }
+    .modal-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+    .modal-header h2 { font-size: 1.2rem; }
+    .modal-content { padding: 1rem; overflow-y: auto; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .form-group input, .form-group select {
+      width: 100%; background-color: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.75rem; color: var(--text-primary); font-size: 1rem;
+    }
+    .modal-footer { padding: 1rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; }
+    .btn { flex: 1; padding: 0.85rem; border-radius: 8px; font-size: 1rem; font-weight: 600; border: none; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-secondary { background-color: transparent; color: var(--primary); border: 1px solid var(--primary);}
+    .settings-group { background-color: var(--surface); border-radius: 12px; margin-bottom: 1.5rem; }
+    .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .settings-item:last-child { border-bottom: none; }
+    .toggle-switch { width: 51px; height: 31px; background: var(--surface-2); border-radius: 31px; position: relative; cursor: pointer; }
+    .toggle-switch::before { content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; background: white; border-radius: 50%; transition: transform .2s ease; }
+    .toggle-switch.active { background: var(--secondary); }
+    .toggle-switch.active::before { transform: translateX(20px); }
+    .report-table { width: 100%; }
+    .report-table td { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+    .report-table tr:last-child td { border-bottom: none; }
+    .report-table .label { color: var(--text-secondary); }
+    .report-table .amount { text-align: right; font-weight: 600; }
+    .report-table .total .amount, .report-table .total .label { color: var(--text-primary); font-weight: 700; font-size: 1.1rem; }
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; }
+    .pagination span { font-size: 0.9rem; color: var(--text-secondary); }
+    .ai-analysis-card { background-color: var(--surface); border-radius: 12px; padding: 1rem; }
+    .ai-analysis-card .header { align-items: flex-start; }
+    .ai-analysis-card .header .info { flex-grow: 1; }
+    .ai-analysis-card .header .name { font-weight: 600; color: var(--accent); }
+    .ai-analysis-card .header .details { font-size: 0.85rem; color: var(--text-secondary); }
+    #ai-feedback { font-size: 0.95rem; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap; }
+    #ai-feedback.loading::after { content: 'Analizando...'; animation: blink .8s infinite; }
+    @keyframes blink { 50% { opacity: 0.5; } }
+
+    /* --- KARDEX VIEW --- */
+    .kardex-header { margin-bottom: 1rem; }
+    .kardex-header .back-btn { background: none; border: none; color: var(--primary); font-size: 1rem; margin-bottom: 1rem; cursor: pointer; }
+    .kardex-header h1 { font-size: 1.8rem; }
+    .kardex-header p { color: var(--text-secondary); }
+    .kardex-item { display: grid; grid-template-columns: 1fr auto; gap: 0.25rem 1rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    .kardex-item .info .type { font-weight: 600; }
+    .kardex-item .info .date { font-size: 0.8rem; color: var(--text-secondary); }
+    .kardex-item .info .note { font-size: 0.85rem; }
+    .kardex-item .flow { text-align: right; }
+    .kardex-item .flow .change { font-weight: 600; font-size: 1.1rem; }
+    .kardex-item .flow .change.in { color: var(--secondary); }
+    .kardex-item .flow .change.out { color: var(--danger); }
+    .kardex-item .flow .balance { font-size: 0.8rem; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+
+  <div id="page-dashboard" class="page active">
+    <div class="header">
+        <div class="title-group">
+            <img src="logo.jpg" alt="Logo" class="logo">
+            <h1>W/J Inventario</h1>
+        </div>
+    </div>
+    <input type="search" id="global-search" class="search-bar" placeholder="🔍 Buscar producto por SKU o nombre...">
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="title">Ingresos (30d)</div><div class="value positive" id="kpi-income">$0.00</div></div>
+      <div class="kpi-card"><div class="title">Costos/Gastos (30d)</div><div class="value negative" id="kpi-costs">$0.00</div></div>
+      <div class="kpi-card"><div class="title">Utilidad Neta (30d)</div><div class="value neutral" id="kpi-profit">$0.00</div></div>
+    </div>
+    <div class="chart-container"><canvas id="main-chart"></canvas></div>
+    <div class="ai-analysis-card">
+        <div class="header">
+            <div class="info">
+                <div class="name">Asistente IA</div>
+                <div class="details">Análisis y recomendaciones para tu negocio.</div>
+            </div>
+            <button class="btn btn-secondary" id="btn-analyze" style="flex: 0.5;">Analizar</button>
+        </div>
+        <p id="ai-feedback" style="margin-top: 1rem;">Presiona "Analizar" para obtener un resumen de tu negocio.</p>
+    </div>
+  </div>
+
+  <div id="page-inventory" class="page">
+    <div class="header"><h1>Inventario</h1></div>
+    <div id="inventory-list"></div>
+  </div>
+
+  <div id="page-transactions" class="page">
+    <div class="header"><h1>Transacciones</h1></div>
+    <div id="transaction-list"></div>
+    <div class="pagination" id="transaction-pagination"></div>
+  </div>
+  
+  <div id="page-reports" class="page">
+    <div class="header"><h1>Reportes</h1></div>
+    <div class="settings-group">
+      <div class="settings-item"><div class="info"><div class="name">Estado de Resultados (P&L)</div><div class="details">Análisis de rentabilidad total.</div></div></div>
+      <div style="padding: 1rem;"><table class="report-table" id="pnl-table"></table></div>
+    </div>
+  </div>
+
+  <div id="page-kardex" class="page"></div>
+
+  <div id="page-settings" class="page">
+    <div class="header"><h1>Ajustes</h1></div>
+    <div class="settings-group"><div class="settings-item"><span>Tema Claro</span><div class="toggle-switch" id="theme-toggle"></div></div></div>
+    <div class="settings-group">
+      <div class="settings-item" id="btn-export"><span>Exportar Datos</span><span>&gt;</span></div>
+      <div class="settings-item" id="btn-import"><span>Importar Datos</span><span>&gt;</span></div>
+    </div>
+  </div>
+
+  <button id="fab-add" class="fab">+</button>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-page="dashboard"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M12 6v6h6"/></svg>Resumen</button>
+    <button class="nav-btn" data-page="inventory"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>Inventario</button>
+    <button class="nav-btn" data-page="transactions"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>Transacciones</button>
+    <button class="nav-btn" data-page="reports"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>Reportes</button>
+    <button class="nav-btn" data-page="settings"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Ajustes</button>
+  </nav>
+
+  <div id="modal-transaction" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header"><h2 id="modal-title">Nueva Transacción</h2></div>
+      <div class="modal-content">
+        <form id="transaction-form">
+          <div class="form-group"><label for="tx-type">Tipo</label><select id="tx-type"><option value="sale">Venta</option><option value="purchase">Compra</option><option value="expense">Gasto</option></select></div>
+          <div class="form-group" id="expense-category-group" style="display: none;"><label for="tx-expense-category">Categoría</label><select id="tx-expense-category"></select></div>
+          <div class="form-group"><label for="tx-date">Fecha</label><input type="date" id="tx-date"></div>
+          <div class="form-group" id="product-select-group"><label for="tx-item">Producto</label><select id="tx-item"></select></div>
+          <div id="new-item-fields" style="display: none;">
+             <div class="form-group"><label for="tx-new-sku">SKU</label><input type="text" id="tx-new-sku" placeholder="Ej: CAM-AZ-M"></div>
+             <div class="form-group"><label for="tx-new-name">Nombre Nuevo</label><input type="text" id="tx-new-name" placeholder="Ej: Camisa Azul Talla M"></div>
+          </div>
+          <div class="form-group"><label for="tx-qty">Cantidad</label><input type="number" id="tx-qty" placeholder="0"></div>
+          <div class="form-group"><label id="tx-price-label" for="tx-price">Precio</label><input type="number" id="tx-price" placeholder="0.00"></div>
+          <div class="form-group"><label for="tx-notes">Notas</label><input type="text" id="tx-notes" placeholder="Detalles adicionales"></div>
+        </form>
+      </div>
+      <div class="modal-footer"><button id="btn-cancel" class="btn btn-secondary">Cancelar</button><button id="btn-save" class="btn btn-primary">Guardar</button></div>
+    </div>
+  </div>
+
+<script>
+// =================================================================================
+// GESTIÓN PRO v1.5 - CORE LOGIC
+// =================================================================================
+document.addEventListener('DOMContentLoaded', () => {
+
+  const DB_KEY = 'gestion_pro_db_v1';
+  let state = {
+    products: [], 
+    transactions: [],
+    settings: {
+      theme: 'dark',
+      expenseTypes: ['Alquiler', 'Servicios', 'Marketing', 'Suministros'],
+    },
+    ui: {
+      tx_currentPage: 1,
+      tx_itemsPerPage: 15,
+    }
+  };
+
+  function saveState() { localStorage.setItem(DB_KEY, JSON.stringify(state)); }
+  function loadState() {
+    const saved = localStorage.getItem(DB_KEY);
+    if (saved) {
+      state = JSON.parse(saved);
+      if (!state.settings) state.settings = { theme: 'dark', expenseTypes: ['Alquiler', 'Servicios', 'Marketing', 'Suministros'] };
+      if (!state.ui) state.ui = { tx_currentPage: 1, tx_itemsPerPage: 15 };
+    }
+  }
+
+  const engine = {
+    createProduct: (sku, name) => {
+      const newProduct = { id: `prod_${Date.now()}`, sku: sku.trim().toUpperCase(), name: name.trim(), qty: 0, costAvg: 0 };
+      state.products.unshift(newProduct);
+      return newProduct;
+    },
+    executeTransaction: (tx) => {
+      let product = tx.productId ? state.products.find(p => p.id === tx.productId) : null;
+      if (tx.type === 'purchase' && tx.isNewProduct && tx.newSku && tx.newName) {
+          const existing = state.products.find(p => p.sku.toUpperCase() === tx.newSku.toUpperCase());
+          if (existing) { alert('Error: Ya existe un producto con ese SKU.'); return false; }
+          product = engine.createProduct(tx.newSku, tx.newName);
+          tx.productId = product.id;
+      }
+      if (tx.type === 'purchase') {
+        if (!product) return false;
+        const { qty: oldQty, costAvg: oldCost } = product;
+        const { qty: purchaseQty, price: purchasePrice } = tx;
+        const newTotalValue = (oldQty * oldCost) + (purchaseQty * purchasePrice);
+        const newTotalQty = oldQty + purchaseQty;
+        product.qty = newTotalQty;
+        product.costAvg = newTotalQty > 0 ? newTotalValue / newTotalQty : 0;
+      }
+      if (tx.type === 'sale') {
+        if (!product) return false;
+        if (product.qty < tx.qty) { alert(`Stock insuficiente para "${product.name}". Disponible: ${product.qty}`); return false; }
+        tx.cogs = tx.qty * product.costAvg; // Calculate COGS before changing qty
+        product.qty -= tx.qty;
+      }
+      state.transactions.unshift({ id: `tx_${Date.now()}`, ...tx });
+      saveState();
+      return true;
+    }
+  };
+
+  const ui = {
+    renderDashboard: () => {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      let income30d = 0, costs30d = 0;
+      state.transactions.forEach(tx => {
+        if (new Date(tx.date) >= thirtyDaysAgo) {
+          if (tx.type === 'sale') {
+            income30d += tx.qty * tx.price;
+            costs30d += tx.cogs || 0;
+          } else if (tx.type === 'expense') {
+            costs30d += tx.qty * tx.price;
+          }
+        }
+      });
+      const profit30d = income30d - costs30d;
+      document.getElementById('kpi-income').textContent = `$${income30d.toFixed(2)}`;
+      document.getElementById('kpi-costs').textContent = `$${costs30d.toFixed(2)}`;
+      document.getElementById('kpi-profit').textContent = `$${profit30d.toFixed(2)}`;
+      document.getElementById('kpi-profit').className = `value ${profit30d >= 0 ? 'positive' : 'neutral'}`;
+      
+      const ctx = document.getElementById('main-chart');
+      if (window.mainChart instanceof Chart) window.mainChart.destroy();
+      const labels = [], incomeData = [], costsData = [];
+      for (let i = 29; i >= 0; i--) {
+          const d = new Date(); d.setDate(d.getDate() - i);
+          const dayStr = d.toISOString().split('T')[0];
+          labels.push(d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }));
+          let dailyIncome = 0, dailyCosts = 0;
+          state.transactions.filter(tx => tx.date === dayStr).forEach(tx => {
+              if (tx.type === 'sale') { dailyIncome += tx.qty * tx.price; dailyCosts += tx.cogs || 0; }
+              if (tx.type === 'expense') dailyCosts += tx.qty * tx.price;
+          });
+          incomeData.push(dailyIncome);
+          costsData.push(dailyCosts);
+      }
+      const isDark = state.settings.theme === 'dark';
+      const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+      const tickColor = isDark ? '#A3A3A3' : '#6e6e73';
+
+      window.mainChart = new Chart(ctx, {
+          type: 'line',
+          data: { labels, datasets: [
+              { label: 'Ingresos', data: incomeData, borderColor: 'var(--secondary)', backgroundColor: 'rgba(48, 209, 88, 0.2)', fill: true, tension: 0.4, pointRadius: 0 },
+              { label: 'Costos', data: costsData, borderColor: 'var(--danger)', backgroundColor: 'rgba(255, 69, 58, 0.2)', fill: true, tension: 0.4, pointRadius: 0 }
+          ]},
+          options: {
+              responsive: true, maintainAspectRatio: false,
+              scales: { x: { grid: { display: false }, ticks: { color: tickColor } }, y: { grid: { color: gridColor }, ticks: { color: tickColor } } },
+              plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+              interaction: { mode: 'index', intersect: false }
+          }
+      });
+    },
+    renderInventoryList: (filter = '') => {
+      const container = document.getElementById('inventory-list');
+      container.innerHTML = '';
+      const lowerCaseFilter = filter.toLowerCase();
+      const filtered = state.products.filter(p => p.name.toLowerCase().includes(lowerCaseFilter) || p.sku.toLowerCase().includes(lowerCaseFilter));
+      
+      if (filtered.length === 0) {
+          container.innerHTML = `<p style="color: var(--text-secondary); text-align: center;">No se encontraron productos.</p>`;
+          return;
+      }
+      if (filtered.length === 1 && filter.length > 0) {
+          ui.renderKardexPage(filtered[0].id);
+          return;
+      }
+      filtered.forEach(p => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'list-item';
+        itemEl.dataset.productId = p.id;
+        itemEl.innerHTML = `
+          <div class="info"><div class="name">${p.name}</div><div class="details">${p.sku}</div></div>
+          <div class="status" style="text-align: right;"><div class="qty">${p.qty}</div><div class="value">$${(p.qty * p.costAvg).toFixed(2)}</div></div>
+        `;
+        itemEl.addEventListener('click', () => ui.renderKardexPage(p.id));
+        container.appendChild(itemEl);
+      });
+    },
+    renderTransactionList: () => {
+        const container = document.getElementById('transaction-list');
+        const paginationContainer = document.getElementById('transaction-pagination');
+        container.innerHTML = ''; paginationContainer.innerHTML = '';
+        const sortedTx = [...state.transactions].sort((a,b) => new Date(b.date) - new Date(a.date));
+        const totalItems = sortedTx.length;
+        if (totalItems === 0) { container.innerHTML = `<p style="color: var(--text-secondary); text-align: center;">No hay transacciones.</p>`; return; }
+        const { tx_currentPage: page, tx_itemsPerPage: perPage } = state.ui;
+        const totalPages = Math.ceil(totalItems / perPage);
+        const paginatedTx = sortedTx.slice((page - 1) * perPage, page * perPage);
+        paginatedTx.forEach(tx => {
+            const product = tx.productId ? state.products.find(p => p.id === tx.productId) : null;
+            let title = '', amount = tx.qty * tx.price, amountClass = '';
+            switch(tx.type) {
+                case 'sale': title = `Venta: ${product ? product.name : 'N/A'}`; amountClass = 'positive'; break;
+                case 'purchase': title = `Compra: ${product ? product.name : 'N/A'}`; amountClass = 'negative'; break;
+                case 'expense': title = `Gasto: ${tx.notes || 'General'}`; amountClass = 'negative'; break;
+            }
+            const itemEl = document.createElement('div');
+            itemEl.className = 'list-item';
+            itemEl.innerHTML = `<div class="info"><div class="name">${title}</div><div class="details">${new Date(tx.date).toLocaleDateString('es-ES')} - ${tx.notes || ''}</div></div><div class="status" style="text-align: right;"><div class="qty ${amountClass}">${tx.type === 'sale' ? '+' : '-'}$${amount.toFixed(2)}</div></div>`;
+            container.appendChild(itemEl);
+        });
+        if (totalPages > 1) {
+            paginationContainer.innerHTML = `<button class="btn btn-secondary" id="tx-prev" ${page === 1 ? 'disabled' : ''}>&lt;</button><span>Página ${page} de ${totalPages}</span><button class="btn btn-secondary" id="tx-next" ${page === totalPages ? 'disabled' : ''}>&gt;</button>`;
+            document.getElementById('tx-prev').addEventListener('click', () => { state.ui.tx_currentPage--; ui.renderTransactionList(); });
+            document.getElementById('tx-next').addEventListener('click', () => { state.ui.tx_currentPage++; ui.renderTransactionList(); });
+        }
+    },
+    renderReportsPage: () => {
+        const pnlTable = document.getElementById('pnl-table');
+        let totalIncome = 0, totalCogs = 0, totalExpenses = 0;
+        state.transactions.forEach(tx => {
+            if (tx.type === 'sale') { totalIncome += tx.qty * tx.price; totalCogs += tx.cogs || 0; } 
+            else if (tx.type === 'expense') { totalExpenses += tx.qty * tx.price; }
+        });
+        const grossProfit = totalIncome - totalCogs;
+        const netProfit = grossProfit - totalExpenses;
+        pnlTable.innerHTML = `<tbody>
+                <tr><td class="label">Ingresos por Ventas</td><td class="amount">$${totalIncome.toFixed(2)}</td></tr>
+                <tr><td class="label">Costo de Mercancía (COGS)</td><td class="amount">-$${totalCogs.toFixed(2)}</td></tr>
+                <tr class="total"><td class="label">Utilidad Bruta</td><td class="amount">$${grossProfit.toFixed(2)}</td></tr>
+                <tr><td class="label">Gastos Operativos</td><td class="amount">-$${totalExpenses.toFixed(2)}</td></tr>
+                <tr class="total"><td class="label">Utilidad Neta</td><td class="amount ${netProfit >= 0 ? 'positive' : 'neutral'}">$${netProfit.toFixed(2)}</td></tr>
+            </tbody>`;
+    },
+    renderKardexPage: (productId) => {
+        const product = state.products.find(p => p.id === productId);
+        if (!product) return;
+        const pageContainer = document.getElementById('page-kardex');
+        pageContainer.innerHTML = `<div class="kardex-header"><button class="back-btn" id="kardex-back-btn">← Inventario</button><h1>${product.name}</h1><p>${product.sku}</p></div><div id="kardex-list"></div>`;
+        const listEl = document.getElementById('kardex-list');
+        const txs = state.transactions.filter(tx => tx.productId === productId).sort((a, b) => new Date(a.date) - new Date(b.date));
+        let balance = 0;
+        txs.forEach(tx => {
+            const qtyChange = tx.type === 'purchase' ? tx.qty : -tx.qty;
+            balance += qtyChange;
+            const itemEl = document.createElement('div');
+            itemEl.className = 'kardex-item';
+            itemEl.innerHTML = `
+              <div class="info"><div class="type">${tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}</div><div class="date">${new Date(tx.date).toLocaleDateString('es-ES')}</div><div class="note">${tx.notes || '---'}</div></div>
+              <div class="flow"><div class="change ${tx.type === 'purchase' ? 'in' : 'out'}">${tx.type === 'purchase' ? '+' : ''}${qtyChange}</div><div class="balance">Saldo: ${balance}</div></div>
+            `;
+            listEl.appendChild(itemEl);
+        });
+        Array.from(listEl.children).reverse().forEach(child => listEl.appendChild(child));
+        switchPage('kardex');
+        document.getElementById('kardex-back-btn').addEventListener('click', () => switchPage('inventory'));
+    },
+    showTransactionModal: () => {
+      document.getElementById('transaction-form').reset();
+      document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+      const itemSelect = document.getElementById('tx-item');
+      itemSelect.innerHTML = '<option value="">-- Selecciona --</option><option value="new_product">-- Crear Nuevo --</option>';
+      state.products.forEach(p => { itemSelect.innerHTML += `<option value="${p.id}">${p.name} (${p.sku})</option>`; });
+      const categorySelect = document.getElementById('tx-expense-category');
+      categorySelect.innerHTML = '';
+      state.settings.expenseTypes.forEach(cat => { categorySelect.innerHTML += `<option value="${cat}">${cat}</option>`; });
+      ui.updateModalFields();
+      document.getElementById('modal-transaction').classList.add('visible');
+    },
+    hideTransactionModal: () => document.getElementById('modal-transaction').classList.remove('visible'),
+    updateModalFields: () => {
+        const type = document.getElementById('tx-type').value;
+        const productGroup = document.getElementById('product-select-group'), expenseGroup = document.getElementById('expense-category-group'),
+              newItemFields = document.getElementById('new-item-fields'), priceLabel = document.getElementById('tx-price-label'),
+              qtyInput = document.getElementById('tx-qty'), itemSelect = document.getElementById('tx-item');
+        productGroup.style.display = 'none'; expenseGroup.style.display = 'none'; newItemFields.style.display = 'none'; qtyInput.disabled = false;
+        if (type === 'sale') { productGroup.style.display = 'block'; priceLabel.textContent = 'Precio de Venta'; } 
+        else if (type === 'purchase') { productGroup.style.display = 'block'; priceLabel.textContent = 'Costo por Unidad'; if (itemSelect.value === 'new_product') newItemFields.style.display = 'block'; }
+        else if (type === 'expense') { expenseGroup.style.display = 'block'; priceLabel.textContent = 'Monto del Gasto'; qtyInput.value = 1; qtyInput.disabled = true; }
+    },
+    applyTheme: (theme) => {
+        document.body.dataset.theme = theme;
+        document.getElementById('theme-toggle').classList.toggle('active', theme === 'light');
+    },
+    generateAIAnalysis: async () => {
+        const feedbackEl = document.getElementById('ai-feedback');
+        feedbackEl.textContent = '';
+        feedbackEl.classList.add('loading');
+        let totalIncome = 0, totalCogs = 0, totalExpenses = 0;
+        const salesByProduct = {};
+        state.transactions.forEach(tx => {
+            if (tx.type === 'sale') {
+                totalIncome += tx.qty * tx.price;
+                totalCogs += tx.cogs || 0;
+                const productName = state.products.find(p => p.id === tx.productId)?.name || 'Desconocido';
+                salesByProduct[productName] = (salesByProduct[productName] || 0) + tx.qty;
+            } else if (tx.type === 'expense') { totalExpenses += tx.qty * tx.price; }
+        });
+        const netProfit = totalIncome - totalCogs - totalExpenses;
+        const bestSeller = Object.entries(salesByProduct).sort((a, b) => b[1] - a[1])[0];
+        const prompt = `Eres un asesor de negocios para pequeñas empresas. Analiza los siguientes datos y proporciona un resumen claro y 3 recomendaciones prácticas y accionables. Sé conciso y amigable. Datos: Ingresos: $${totalIncome.toFixed(2)}, COGS: $${totalCogs.toFixed(2)}, Gastos: $${totalExpenses.toFixed(2)}, Utilidad Neta: $${netProfit.toFixed(2)}, Producto más vendido: ${bestSeller ? `${bestSeller[0]} (${bestSeller[1]} unidades)` : 'Ninguno'}. Análisis en español.`;
+        try {
+            const apiKey = ""; // Canvas will provide the key
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) throw new Error(`Error de API: ${response.statusText}`);
+            const result = await response.json();
+            const text = result.candidates[0].content.parts[0].text;
+            feedbackEl.textContent = text;
+        } catch (error) {
+            console.error("Error fetching AI analysis:", error);
+            feedbackEl.textContent = "No se pudo obtener el análisis. Inténtalo de nuevo más tarde.";
+        } finally {
+            feedbackEl.classList.remove('loading');
+        }
+    }
+  };
+
+  const navButtons = document.querySelectorAll('.nav-btn'), pages = document.querySelectorAll('.page');
+  function switchPage(pageId) {
+    pages.forEach(p => p.classList.remove('active'));
+    document.getElementById(`page-${pageId}`).classList.add('active');
+    navButtons.forEach(b => b.classList.remove('active'));
+    const activeBtn = document.querySelector(`.nav-btn[data-page="${pageId}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+    if (pageId === 'dashboard') ui.renderDashboard();
+    if (pageId === 'inventory') ui.renderInventoryList();
+    if (pageId === 'transactions') ui.renderTransactionList();
+    if (pageId === 'reports') ui.renderReportsPage();
+  }
+  navButtons.forEach(btn => btn.addEventListener('click', () => switchPage(btn.dataset.page)));
+
+  document.getElementById('global-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const query = e.target.value.toLowerCase().trim();
+      ui.renderInventoryList(query);
+      if (query) switchPage('inventory');
+    }
+  });
+
+  document.getElementById('fab-add').addEventListener('click', ui.showTransactionModal);
+  document.getElementById('btn-cancel').addEventListener('click', ui.hideTransactionModal);
+  document.getElementById('tx-type').addEventListener('change', ui.updateModalFields);
+  document.getElementById('tx-item').addEventListener('change', ui.updateModalFields);
+  
+  document.getElementById('btn-save').addEventListener('click', () => {
+    const type = document.getElementById('tx-type').value;
+    const tx = { type, date: document.getElementById('tx-date').value, productId: document.getElementById('tx-item').value,
+      qty: parseFloat(document.getElementById('tx-qty').value) || 0, price: parseFloat(document.getElementById('tx-price').value) || 0,
+      notes: type === 'expense' ? document.getElementById('tx-expense-category').value : document.getElementById('tx-notes').value.trim(),
+      isNewProduct: document.getElementById('tx-item').value === 'new_product', newSku: document.getElementById('tx-new-sku').value, newName: document.getElementById('tx-new-name').value,
+    };
+    if (!tx.date) { alert('Por favor, selecciona una fecha.'); return; }
+    if (engine.executeTransaction(tx)) {
+      ui.hideTransactionModal();
+      const activePageId = document.querySelector('.page.active').id.split('-')[1];
+      switchPage(activePageId);
+    }
+  });
+
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const newTheme = state.settings.theme === 'dark' ? 'light' : 'dark';
+    state.settings.theme = newTheme;
+    ui.applyTheme(newTheme);
+    saveState();
+    ui.renderDashboard();
+  });
+  
+  document.getElementById('btn-analyze').addEventListener('click', ui.generateAIAnalysis);
+
+  loadState();
+  ui.applyTheme(state.settings.theme);
+  switchPage('dashboard');
+});
+</script>
+</body>
+</html>
